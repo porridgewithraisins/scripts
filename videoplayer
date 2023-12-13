@@ -1,0 +1,11 @@
+#! /usr/bin/env bash
+
+duration="$(ffprobe "$1" 2>&1 | grep Duration | awk '{print $2}' | sed 's/\..*$//' | sed 's/:/\\:/g')"
+options="drawtext=text='%{pts\:gmtime\:0\:%H\\\\\:%M\\\\\:%S}/$duration:x=1:y=1:fontsize=10:fontcolor=white:box=1:boxcolor=black'"
+if [ $2 == "--subs" ]; then
+    ffplay -vf "subtitles='$(echo $3 | sed 's/:/\\:/g')', $options" "$1"
+elif ffprobe "$1" 2>&1 | grep "Subtitle:"; then
+    ffplay -vf "subtitles=$(printf '%q' "$1"), $options" "$1"
+else
+    ffplay -vf "$options" "$1"
+fi;

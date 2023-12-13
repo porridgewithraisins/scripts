@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+curl -H "Authorization: Client-ID 4df67e020e30568" \
+     --data-binary "@$1" \
+     https://api.imgur.com/3/image
+
+

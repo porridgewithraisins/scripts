@@ -1,0 +1,4 @@
+#! /usr/bin/env bash
+
+docker stop postgres
+if [[ "$1" == "--full" ]]; then systemctl stop docker; fi;

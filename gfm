@@ -1,0 +1,48 @@
+#! /usr/bin/env -S deno run --allow-read=/dev/stdin --allow-write=/dev/stdout --allow-net=api.github.com,cdnjs.cloudflare.com,esm.sh
+
+// Markdown to HTML - Github style. Responsive, dark + light theme, syntax highlighting.
+// Usage: cat input.md | this-script "Title of document" > output.html
+// Uses Github's API to convert the html into markdown.
+// Links Sindre Sorhus' github markdown css file, as well as the Starry Night css file for syntax highlighting in code fences.
+
+const title = Deno.args[0] || "Document";
+const markdown = Deno.readTextFileSync("/dev/stdin");
+
+const payload = { text: markdown };
+const htmlBody = await fetch("https://api.github.com/markdown", {
+    method: "POST",
+    body: JSON.stringify(payload),
+}).then(res => res.text());
+
+const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> ${title} </title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
+    <link rel="stylesheet" href="https://esm.sh/@wooorm/starry-night@2/style/both.css">
+    <style>
+        .markdown-body {
+            box-sizing: border-box;
+            min-width: 200px;
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 45px;
+        }
+
+        @media (max-width: 767px) {
+            .markdown-body {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <article class=markdown-body>
+        ${htmlBody.replace(/\n$/, "")}
+    </article>
+</body>
+</html>`;
+
+Deno.writeTextFileSync("/dev/stdout", html);

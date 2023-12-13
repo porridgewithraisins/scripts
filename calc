@@ -1,0 +1,10 @@
+#! /usr/bin/env bash
+
+wid=$(xdotool search --name "calc repl")
+if [ $wid == $(xdotool getactivewindow) ]; then
+    xdotool search --name "calc repl" windowminimize
+elif [ $wid ]; then
+    xdotool search --name "calc repl" windowactivate
+else
+    xfce4-terminal --title "calc repl" --execute qalc
+fi

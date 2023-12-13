@@ -1,0 +1,3 @@
+#! /usr/bin/env bash
+
+ss -naHpo | grep "pid=$1" | tr -s '\t' ' ' | cut -d' ' -f5

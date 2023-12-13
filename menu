@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+set -eo pipefail
+
+if [ `id -u` -ne 0 ];then
+    echo "Must run as root"
+    exit 1
+fi
+
+cleanup() {
+    if [ -f "$working" ]; then rm "$working"; fi;
+}
+
+display() {
+    clear
+    for ((i = 0; i < len; i++)); do
+        if [ $i -eq $idx ]; then
+            echo "* ${items[i]}"
+            else
+            echo "  ${items[i]}"
+        fi
+    done
+
+    echo
+    echo "Use arrow keys to move, enter to select, and q to quit."
+    echo "No scrolling, so if there's a lot of networks, resize your terminal to see all of them."
+}
+
+connectionFlow() {
+    ssid=`echo -e "$1" | cut -f1`
+    read -sp "Enter your password: " password
+    network_id=`wpa_cli add_network | tail -1`
+    wpa_passphrase "$ssid" "$password" | sed 3d
+    # read -p "Switch to this network? (y/n)?" choice
+    # if [[ "$choice" =~ "[yY]" ]]; then
+    #     wpa_cli select_network $network_id
+    #     echo "Switching networks..."
+    #     sleep 1
+    # fi
+}
+
+
+main() {
+    trap cleanup EXIT
+    trap cleanup INT
+    configfile="/etc/wpa_supplicant/wpa_supplicant-wlp1s0.conf"
+    working="$configfile~"
+    if ! cp "$configfile" "$working" 2>/dev/null; then
+        echo "Error: Config file is not present or not readable. Exiting..."
+        sleep 2
+        exit 1
+    fi
+    wpa_cli scan >/dev/null 2>&1
+    echo Scanning...
+    sleep 2
+    readarray -t items < <(wpa_cli scan_results | tail -n+3 | awk -F'\t' '{ print $5 "\t" ($2 ~ /^5/ ? "5GHz" : "2.4GHz") }')
+    len=${#items[@]}
+    idx=0
+
+    display
+
+    while true; do
+        read -sn1 key
+        case $key in
+            "A")
+                idx=$(( (idx + len - 1) % len ))
+                display
+            ;;
+            "B")
+                idx=$(( (idx + 1) % len ))
+                display
+            ;;
+            "q")
+                exit 0
+            ;;
+            "")
+                connectionFlow "${items[idx]}"
+                exit 0
+            ;;
+        esac
+
+    done
+}
+
+main

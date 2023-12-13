@@ -1,0 +1,4 @@
+#! /usr/bin/env bash
+systemctl start docker
+docker start postgres
+

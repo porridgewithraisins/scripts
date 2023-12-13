@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+
+# Display the form to get the size and aspect ratio options
+num_images=$#
+title="Resizing "$num_images" image(s)"
+length=${#title}
+width=$((length * 14))
+
+if [ $num_images -eq 1 ]; then
+    read original_width original_height <<< $(identify -format "%w %h" "$1")
+fi;
+
+FORM=$(yad --form \
+    --title="$title" \
+    --width="$width" \
+    --field="Width":NUM "$original_width!!100" \
+    --field="Height":NUM "$original_height!!100" \
+    --field="Maintain Aspect Ratio (ignores the height field)":CHK TRUE \
+    --field="Overwrite these images with resized ones":CHK FALSE \
+    --button="Cancel:1" --button="Resize:0")
+RC=$?
+
+# Check if the user pressed Cancel or the close button
+if [ $RC -eq 1 ] || [ $RC -eq 252 ]; then
+    exit 1
+fi
+
+# Get the values of the form fields
+WIDTH=$(echo "$FORM" | awk -F'|' '{print $1}')
+HEIGHT=$(echo "$FORM" | awk -F'|' '{print $2}')
+MAINTAIN_ASPECT_RATIO=$(echo "$FORM" | awk -F'|' '{print $3}')
+OVERWRITE=$(echo "$FORM" | awk -F'|' '{print $4}')
+
+SIZE="$WIDTH"x"$HEIGHT"
+
+if [[ "$MAINTAIN_ASPECT_RATIO" == "TRUE" ]]; then
+    RESIZE_CMD="-resize $SIZE"
+else
+    RESIZE_CMD="-resize $SIZE!"
+fi
+
+resized_count=0
+for FILENAME in "$@"; do
+    if ! [ -f "$FILENAME" ]; then
+        yad --error --title="Error" --text="Cannot find image "$FILENAME"." --justify=center --button="Ok:0"
+        continue
+    fi
+
+    if [[ "$OVERWRITE" == "TRUE" ]]; then
+        convert "$FILENAME" $RESIZE_CMD "$FILENAME"
+    else
+        convert "$FILENAME" $RESIZE_CMD "${FILENAME%.*}-resized.${FILENAME##*.}"
+    fi
+
+    if [ $? -eq 1 ]; then
+        yad --error --width=200 --title="Error" --text="Error resizing images." --justify=center --button="Ok:0"
+        exit 1
+    fi
+
+    resized_count=$(($resized_count + 1))
+done
+
+cmd=yad
+if [ $resized_count -eq 0 ]; then
+    title="Failure"
+    cmd="yad --error"
+elif [ $resized_count -ne $num_images ]; then
+    title="Partial Success"
+else
+    title="Success"
+fi
+
+$cmd --width=250 --title="$title" --text="Finished resizing $resized_count image(s)." --justify=center --button="Ok:0"
