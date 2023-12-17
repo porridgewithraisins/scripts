@@ -271,7 +271,7 @@ class Config:
         self.loadOptions()
 
     def loadOptions(self):
-        self.hotkey = self.getOption('hotkey', '<Super>space')
+        self.hotkey = self.getOption('hotkey', '<Ctrl>space')
         self.ignored_windows = self.prepareIgnoredWindows(
             self.getOption('ignored_windows', [])
         )
