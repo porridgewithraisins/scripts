@@ -1,1 +1,4 @@
-brave --enable-blink-features=MiddleClickAutoscroll "$@"
+brave \
+--enable-blink-features=MiddleClickAutoscroll \
+--enable-features=VaapiVideoDecoder,VaapiIgnoreDriverChecks,Vulkan,DefaultANGLEVulkan,VulkanFromANGLE \
+"$@"
