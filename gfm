@@ -1,4 +1,4 @@
-#! /usr/bin/env -S deno run --allow-read=/dev/stdin --allow-write=/dev/stdout --allow-net=api.github.com,cdnjs.cloudflare.com,esm.sh
+#! /usr/bin/env -S deno run --allow-all
 
 // Markdown to HTML - Github style. Responsive, dark + light theme, syntax highlighting.
 // Usage: cat input.md | this-script "Title of document" > output.html
