@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# godev — Go toolchain sandbox activator
+#
+# Usage:
+#   source godev
+#   godev-install-tools   # optional helper to install gopls into this toolchain
+#   godev-deactivate      # restore environment
+#
+# Description:
+#   Creates an isolated Go toolchain environment where:
+#     GOROOT=$HOME/gocompiler (or $GODEV_ROOT if set)
+#     GOBIN=$GOROOT/bin
+#     PATH prepends $GOBIN
+#
+#   Everything stays inside this directory. Your system Go remains untouched.
+
+: "${GODEV_ROOT:=$HOME/gocompiler}"
+
+# ensure interactive shell
+if test -z "$BASH_VERSION" && test -z "$ZSH_VERSION"; then
+    echo "godev: please 'source' this in bash or zsh." >&2
+    return 1
+fi
+
+if ! test -d "$GODEV_ROOT"; then
+    echo "godev: WARNING: directory '$GODEV_ROOT' does not exist." >&2
+fi
+
+# save old environment
+export GODEV_OLD_PATH="$PATH"
+export GODEV_OLD_PS1="$PS1"
+export GODEV_OLD_GOROOT="$GOROOT"
+
+# activate sandbox
+export GOROOT="$GODEV_ROOT"
+export GOBIN="$GOROOT/bin"
+export PATH="$GOBIN:$PATH"
+unset GO 2>/dev/null || true
+export PS1="(godev) $PS1"
+
+# define and export deactivate
+godev-deactivate() {
+    export PATH="$GODEV_OLD_PATH"
+    export PS1="$GODEV_OLD_PS1"
+    if test -n "$GODEV_OLD_GOROOT"; then
+        export GOROOT="$GODEV_OLD_GOROOT"
+    else
+        unset GOROOT
+    fi
+    unset GOBIN
+    unset GODEV_OLD_PATH GODEV_OLD_PS1 GODEV_OLD_GOROOT
+    unset -f godev-deactivate
+    unset -f godev-install-tools
+    echo "godev: deactivated"
+}
+export -f godev-deactivate
+
+# define and export install helper
+godev-install-tools() {
+    if ! command -v go >/dev/null 2>&1; then
+        echo "godev: 'go' not found; build your toolchain first (run ./src/make.bash)." >&2
+        return 1
+    fi
+    export GOBIN="$GOROOT/bin"
+    echo "godev: installing gopls into $GOBIN ..."
+    go install golang.org/x/tools/gopls@latest || return 1
+    echo "godev: gopls installed to $GOBIN"
+}
+export -f godev-install-tools
+
+echo "godev: activated (GOROOT=$GOROOT)"
+echo "Use 'godev-deactivate' to exit, or 'godev-install-tools' to install gopls."
