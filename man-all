@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+apropos . | fzf --preview 'man -P cat {1}' --preview-window=right:70%
+
