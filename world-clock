@@ -1,0 +1,3 @@
+#! /usr/bin/env bash
+
+timedatectl list-timezones | gum filter --height 15 --preview 'TZ={} date'
