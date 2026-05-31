@@ -1,0 +1,11 @@
+#! /usr/bin/env bash
+
+mkdir -p ~/.aur-monitor
+
+journalctl -kf --grep 'AUR_CONNECTION.*SYN' | while read -r line; do
+    ip=$(echo "$line" | grep -Po 'DST=\K[0-9.]+')
+    ss -tp | grep "$ip" | awk '{print $NF}' | grep -Po 'pid=\K[0-9]+' | while read -r pid; do
+        cmdline=$(cat /proc/"$pid"/cmdline | tr '\0' ' ')
+        echo -e "$(date -Is)\t$pid\t$cmdline\n"
+    done | sort | uniq
+done >> ~/.aur-monitor/"$(date -Id)".log 2>> ~/.aur-monitor/"$(date -Id)".stderr
