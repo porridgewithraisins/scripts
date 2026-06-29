@@ -167,9 +167,6 @@ class WorkspaceTagger(Gtk.Window):
             wm_class = parts[3]
             title = parts[5]
 
-            if workspace_id == "-1":
-                continue
-
             workspaces.setdefault(
                 workspace_id,
                 []
@@ -251,40 +248,66 @@ class WorkspaceTagger(Gtk.Window):
 
         search = self.search_text.lower()
 
+        if "-1" in workspaces:
+            self._render_workspace_frame(
+                "-1",
+                workspaces["-1"],
+                search,
+                label="Pinned (All Workspaces)"
+            )
+
         for ws_id in sorted(
-            workspaces.keys(),
+            (k for k in workspaces.keys() if k != "-1"),
             key=int
         ):
-            frame = Gtk.Frame()
-
-            outer_box = Gtk.Box(
-                orientation=Gtk.Orientation.VERTICAL,
-                spacing=10,
-                margin=12
+            self._render_workspace_frame(
+                ws_id,
+                workspaces[ws_id],
+                search
             )
 
-            frame.add(outer_box)
+        self.show_all()
 
-            header = Gtk.Box(
-                orientation=Gtk.Orientation.HORIZONTAL,
-                spacing=8
-            )
+    def _render_workspace_frame(
+        self,
+        ws_id,
+        windows,
+        search,
+        label=None
+    ):
+        frame = Gtk.Frame()
 
-            title = Gtk.Label()
+        outer_box = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=10,
+            margin=12
+        )
 
-            title.set_markup(
-                f"<b>Workspace {ws_id}</b>"
-            )
+        frame.add(outer_box)
 
-            title.set_xalign(0)
+        header = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL,
+            spacing=8
+        )
 
-            header.pack_start(
-                title,
-                True,
-                True,
-                0
-            )
+        heading_text = label or f"Workspace {ws_id}"
 
+        title = Gtk.Label()
+
+        title.set_markup(
+            f"<b>{heading_text}</b>"
+        )
+
+        title.set_xalign(0)
+
+        header.pack_start(
+            title,
+            True,
+            True,
+            0
+        )
+
+        if ws_id != "-1":
             switch_btn = Gtk.Button()
 
             switch_icon = Gtk.Image.new_from_icon_name(
@@ -311,238 +334,236 @@ class WorkspaceTagger(Gtk.Window):
                 0
             )
 
-            outer_box.pack_start(
-                header,
-                False,
-                False,
-                0
+        outer_box.pack_start(
+            header,
+            False,
+            False,
+            0
+        )
+
+        windows_box = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=6
+        )
+
+        visible_count = 0
+
+        for window in windows:
+            title_lower = window["title"].lower()
+
+            pinned = (
+                window["id"]
+                in self.pinned_windows
             )
 
-            windows_box = Gtk.Box(
-                orientation=Gtk.Orientation.VERTICAL,
-                spacing=6
+            if search:
+                if (
+                    search not in title_lower
+                    and not pinned
+                ):
+                    continue
+
+            visible_count += 1
+
+            row = Gtk.Box(
+                orientation=Gtk.Orientation.HORIZONTAL,
+                spacing=8
             )
 
-            visible_count = 0
+            wm_class = window["class"]
 
-            for window in workspaces[ws_id]:
-                title_lower = window["title"].lower()
+            candidates = [
+                c.strip()
+                for c in wm_class.split(".")
+            ]
 
-                pinned = (
-                    window["id"]
-                    in self.pinned_windows
-                )
+            icon_name = None
 
-                if search:
-                    if (
-                        search not in title_lower
-                        and not pinned
-                    ):
-                        continue
+            theme = Gtk.IconTheme.get_default()
 
-                visible_count += 1
+            for candidate in candidates:
+                if theme.has_icon(candidate):
+                    icon_name = candidate
+                    break
 
-                row = Gtk.Box(
-                    orientation=Gtk.Orientation.HORIZONTAL,
-                    spacing=8
-                )
-
-                wm_class = window["class"]
-
-                candidates = [
-                    c.strip()
-                    for c in wm_class.split(".")
-                ]
-
-                icon_name = None
-
-                theme = Gtk.IconTheme.get_default()
-
+            if icon_name is None:
                 for candidate in candidates:
-                    if theme.has_icon(candidate):
-                        icon_name = candidate
+                    if theme.has_icon(candidate.lower()):
+                        icon_name = candidate.lower()
                         break
 
-                if icon_name is None:
-                    for candidate in candidates:
-                        if theme.has_icon(candidate.lower()):
-                            icon_name = candidate.lower()
-                            break
+            if icon_name is None:
+                icon_name = "application-x-executable"
 
-                if icon_name is None:
-                    icon_name = "application-x-executable"
+            icon = Gtk.Image.new_from_icon_name(
+                icon_name,
+                Gtk.IconSize.MENU
+            )
 
-                icon = Gtk.Image.new_from_icon_name(
-                    icon_name,
-                    Gtk.IconSize.MENU
-                )
+            win_label = Gtk.Label()
 
-                label = Gtk.Label()
+            win_label.set_text(window["title"])
 
-                label.set_text(window["title"])
+            win_label.set_tooltip_text(
+                window["title"]
+            )
 
-                label.set_tooltip_text(
-                    window["title"]
-                )
+            win_label.set_xalign(0)
 
-                label.set_xalign(0)
+            win_label.set_yalign(0.5)
 
-                label.set_yalign(0.5)
+            win_label.set_selectable(True)
 
-                label.set_selectable(True)
+            win_label.set_hexpand(True)
 
-                label.set_hexpand(True)
+            win_label.set_halign(Gtk.Align.FILL)
 
-                label.set_halign(Gtk.Align.FILL)
+            win_label.set_single_line_mode(True)
 
-                label.set_single_line_mode(True)
+            win_label.set_ellipsize(
+                Pango.EllipsizeMode.END
+            )
 
-                label.set_ellipsize(
-                    Pango.EllipsizeMode.END
-                )
+            pin_btn = Gtk.ToggleButton()
 
-                pin_btn = Gtk.ToggleButton()
+            pin_icon = Gtk.Image.new_from_icon_name(
+                "view-pin-symbolic",
+                Gtk.IconSize.MENU
+            )
 
-                pin_icon = Gtk.Image.new_from_icon_name(
-                    "starred-symbolic",
-                    Gtk.IconSize.MENU
-                )
+            pin_btn.add(pin_icon)
 
-                pin_btn.add(pin_icon)
+            pin_btn.set_active(pinned)
 
-                pin_btn.set_active(pinned)
+            pin_btn.set_tooltip_text(
+                "Pin to all workspaces"
+            )
 
-                pin_btn.set_tooltip_text(
-                    "Pin window"
-                )
+            pin_btn.connect(
+                "toggled",
+                self.on_pin_toggled,
+                window["id"]
+            )
 
-                pin_btn.connect(
-                    "toggled",
-                    self.on_pin_toggled,
-                    window["id"]
-                )
+            bring_btn = Gtk.Button()
 
-                bring_btn = Gtk.Button()
+            bring_icon = Gtk.Image.new_from_icon_name(
+                "go-next-symbolic",
+                Gtk.IconSize.MENU
+            )
 
-                bring_icon = Gtk.Image.new_from_icon_name(
-                    "go-next-symbolic",
-                    Gtk.IconSize.MENU
-                )
+            bring_btn.add(bring_icon)
 
-                bring_btn.add(bring_icon)
+            bring_btn.set_tooltip_text(
+                "Bring window here"
+            )
 
-                bring_btn.set_tooltip_text(
-                    "Bring window here"
-                )
+            bring_btn.connect(
+                "clicked",
+                self.on_bring_clicked,
+                window["id"]
+            )
 
-                bring_btn.connect(
-                    "clicked",
-                    self.on_bring_clicked,
-                    window["id"]
-                )
+            close_btn = Gtk.Button()
 
-                close_btn = Gtk.Button()
+            close_icon = Gtk.Image.new_from_icon_name(
+                "window-close-symbolic",
+                Gtk.IconSize.MENU
+            )
 
-                close_icon = Gtk.Image.new_from_icon_name(
-                    "window-close-symbolic",
-                    Gtk.IconSize.MENU
-                )
+            close_btn.add(close_icon)
 
-                close_btn.add(close_icon)
+            close_btn.set_tooltip_text(
+                "Close window"
+            )
 
-                close_btn.set_tooltip_text(
-                    "Close window"
-                )
+            close_btn.connect(
+                "clicked",
+                self.on_close_clicked,
+                window["id"]
+            )
 
-                close_btn.connect(
-                    "clicked",
-                    self.on_close_clicked,
-                    window["id"]
-                )
-
-                row.pack_start(
-                    icon,
-                    False,
-                    False,
-                    0
-                )
-
-                row.pack_start(
-                    label,
-                    True,
-                    True,
-                    0
-                )
-
-                row.pack_start(
-                    pin_btn,
-                    False,
-                    False,
-                    0
-                )
-
-                row.pack_start(
-                    bring_btn,
-                    False,
-                    False,
-                    0
-                )
-
-                row.pack_start(
-                    close_btn,
-                    False,
-                    False,
-                    0
-                )
-
-                windows_box.pack_start(
-                    row,
-                    False,
-                    False,
-                    0
-                )
-
-            if visible_count == 0:
-                continue
-
-            outer_box.pack_start(
-                windows_box,
+            row.pack_start(
+                icon,
                 False,
                 False,
                 0
             )
 
-            metadata_entry = Gtk.Entry()
-
-            metadata_entry.set_placeholder_text(
-                "Metadata / notes"
+            row.pack_start(
+                win_label,
+                True,
+                True,
+                0
             )
 
-            metadata_entry.set_text(
-                self.metadata.get(ws_id, "")
-            )
-
-            metadata_entry.connect(
-                "changed",
-                self.on_metadata_changed,
-                ws_id
-            )
-
-            outer_box.pack_start(
-                metadata_entry,
+            row.pack_start(
+                pin_btn,
                 False,
                 False,
                 0
             )
 
-            self.workspace_box.pack_start(
-                frame,
+            row.pack_start(
+                bring_btn,
                 False,
                 False,
                 0
             )
 
-        self.show_all()
+            row.pack_start(
+                close_btn,
+                False,
+                False,
+                0
+            )
+
+            windows_box.pack_start(
+                row,
+                False,
+                False,
+                0
+            )
+
+        if visible_count == 0:
+            return
+
+        outer_box.pack_start(
+            windows_box,
+            False,
+            False,
+            0
+        )
+
+        metadata_entry = Gtk.Entry()
+
+        metadata_entry.set_placeholder_text(
+            "Metadata / notes"
+        )
+
+        metadata_entry.set_text(
+            self.metadata.get(ws_id, "")
+        )
+
+        metadata_entry.connect(
+            "changed",
+            self.on_metadata_changed,
+            ws_id
+        )
+
+        outer_box.pack_start(
+            metadata_entry,
+            False,
+            False,
+            0
+        )
+
+        self.workspace_box.pack_start(
+            frame,
+            False,
+            False,
+            0
+        )
 
     def on_focus_out(self, *_args):
         if not self.keep_open:
@@ -605,8 +626,17 @@ class WorkspaceTagger(Gtk.Window):
     ):
         if button.get_active():
             self.pinned_windows.add(window_id)
+            subprocess.call([
+                "wmctrl", "-ir", window_id,
+                "-b", "add,sticky"
+            ])
         else:
             self.pinned_windows.discard(window_id)
+            subprocess.call([
+                "wmctrl", "-ir", window_id,
+                "-b", "remove,sticky"
+            ])
+        self.refresh()
 
     def on_search_changed(self, entry):
         self.search_text = entry.get_text()

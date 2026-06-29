@@ -324,7 +324,7 @@ class Config:
             if not should_show:
                 ignored_window_types.append(window_types[window_type]['window_type'])
 
-        return ignored_window_types
+        return ignored_window_types + [window_types['dock']['window_type'], window_types['desktop']['window_type']]
 
 # Catch SIGINT signal
 signal.signal(signal.SIGINT, signal.SIG_DFL)
