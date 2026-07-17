@@ -4,6 +4,8 @@
 # Reserves space for any _NET_WM_WINDOW_TYPE_DOCK (xfce4-panel, etc.) on any edge
 # usage: tile-gap {q,w,e,a,s,d,z,x,c}
 # s: cycle max -> center A (3/5 x 2/3) -> center B (9/10 x 9/10) -> max -> ...
+# a/d: pin left/right edge (inward resize), cycle width %
+#      50..75 by 5, then 25..45 by 5, wrap to 50
 
 set -euo pipefail
 
@@ -18,6 +20,8 @@ CENTER_B_W_NUM=9
 CENTER_B_W_DEN=10
 CENTER_B_H_NUM=9
 CENTER_B_H_DEN=10
+# a/d width cycle (percent of usable mw)
+SIDE_PCTS="50 55 60 65 70 75 25 30 35 40 45"
 mx=
 my=
 mw=
@@ -123,10 +127,30 @@ resolve_usable() {
 }
 
 apply_geom() {
+  # x,y,w,h = desired *decorated* box inside usable area.
+  # wmctrl -e size is client size; subtract frame so we don't cover the panel.
+  fl=0
+  fr=0
+  ft=0
+  fb=0
+  # xprop: _NET_FRAME_EXTENTS(CARDINAL) = 2, 2, 34, 2  (no '#')
+  ext=$(xprop -id "$wid" _NET_FRAME_EXTENTS 2>/dev/null | sed -n 's/.*= //p' | tr -d ',')
+  if test -n "$ext"; then
+    set -- $ext
+    fl=${1:-0}
+    fr=${2:-0}
+    ft=${3:-0}
+    fb=${4:-0}
+  fi
+  cw=$(( w - fl - fr ))
+  ch=$(( h - ft - fb ))
+  if (( cw < 1 )); then cw=1; fi
+  if (( ch < 1 )); then ch=1; fi
+
   wmctrl -i -r "$wid" -b remove,maximized_vert,maximized_horz
   # some WMs: a single -e can drop Y when height grows a lot (q→a, e→d)
   # resize first, then move so the top edge keeps its gap
-  wmctrl -i -r "$wid" -e "0,-1,-1,$w,$h"
+  wmctrl -i -r "$wid" -e "0,-1,-1,$cw,$ch"
   wmctrl -i -r "$wid" -e "0,$x,$y,-1,-1"
 }
 
@@ -182,13 +206,75 @@ toggle_s() {
   fi
 }
 
+# left|right: pin outer edge (grow/shrink inward), cycle SIDE_PCTS by nearest width
+cycle_lr() {
+  side=$1
+  resolve_usable
+
+  # nearest step to current width (apps may clamp min width past our target)
+  n=0
+  for _ in $SIDE_PCTS; do n=$(( n + 1 )); done
+  i=0
+  found=0
+  best=99999
+  for pct in $SIDE_PCTS; do
+    ew=$(( mw * pct / 100 - 2 * GAP ))
+    dw=$(( ww - ew ))
+    if (( dw < 0 )); then dw=$(( -dw )); fi
+    if (( dw < best )); then
+      best=$dw
+      found=$i
+    fi
+    i=$(( i + 1 ))
+  done
+  # if nowhere near a step, start at 50; else advance
+  if (( best > 80 )); then
+    idx=0
+  else
+    idx=$(( (found + 1) % n ))
+  fi
+
+  i=0
+  for pct in $SIDE_PCTS; do
+    if (( i == idx )); then
+      break
+    fi
+    i=$(( i + 1 ))
+  done
+
+  w=$(( mw * pct / 100 - 2 * GAP ))
+  h=$(( mh - 2 * GAP ))
+  y=$(( my + GAP ))
+  if test "$side" = left; then
+    x=$(( mx + GAP ))
+  else
+    x=$(( mx + mw - GAP - w ))
+  fi
+  apply_geom
+  # min-width apps keep a larger client w; re-pin decorated right edge on this monitor
+  if test "$side" = right; then
+    eval "$(xdotool getwindowgeometry --shell "$wid")"
+    fl=0
+    fr=0
+    ext=$(xprop -id "$wid" _NET_FRAME_EXTENTS 2>/dev/null | sed -n 's/.*= //p' | tr -d ',')
+    if test -n "$ext"; then
+      set -- $ext
+      fl=${1:-0}
+      fr=${2:-0}
+    fi
+    x=$(( mx + mw - GAP - WIDTH - fl - fr ))
+    if (( x < mx + GAP )); then x=$(( mx + GAP )); fi
+    wmctrl -i -r "$wid" -e "0,$x,$y,-1,-1"
+  fi
+}
+
 case "${1:-}" in
   q) place 0 0 1 1 ;;
   w) place 0 0 2 1 ;;
   e) place 1 0 1 1 ;;
-  a) place 0 0 1 2 ;;
+  a) cycle_lr left ;;
   s) toggle_s ;;
-  d) place 1 0 1 2 ;;
+  d) cycle_lr right ;;
   z) place 0 1 1 1 ;;
   x) place 0 1 2 1 ;;
   c) place 1 1 1 1 ;;
