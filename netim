@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+test "$#" -eq 1 && test "$1" == "home" -o "$1" == "outside" || { echo "Usage: netim [home|outside]"; exit 1; }
+
+test "$(id -u)" -eq 0 || { echo "Requires root: sudo netim $*"; exit 1; }
+
+base=/etc/systemd/network
+
+if test -f $base/25-wired.network.disabled -a "$1" == "outside"; then
+    set -x
+    mv $base/25-wired.network{.disabled,}
+    mv $base/35-wifi.network{.disabled,}
+    mv $base/20-wired.network{,.disabled}
+    mv $base/30-wifi.network{,.disabled}
+elif test -f $base/20-wired.network.disabled -a "$1" == "home"; then
+    set -x
+    mv $base/20-wired.network{.disabled,}
+    mv $base/30-wifi.network{.disabled,}
+    mv $base/25-wired.network{,.disabled}
+    mv $base/35-wifi.network{,.disabled}
+else
+    echo "You are already $1"
+    exit
+fi
+
+networkctl reload
