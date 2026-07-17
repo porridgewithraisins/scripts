@@ -1,0 +1,26 @@
+#! /usr/bin/env bash
+set -euo pipefail
+
+if test "$#" -eq 0; then
+    echo "Usage: rlg <file> [max_lines: default 5000]"
+    exit 1
+fi
+
+if test "$1" == "-d" && shift; then
+    touch "$1"
+    echo Rotating between "$1"{,.2} every "$2" lines
+    while true; do
+        sleep 5
+        lines="$(cat "$1" | wc -l)"
+        if test "$lines" -ge "$2"; then
+            rm -f "$1".2
+            mv "$1"{,.2}
+            touch "$1"
+        fi
+    done
+    exit 0
+fi
+
+file="$1" && shift
+if test "$#" -ge 1 && test -n "$1" && test "$1" -eq "$1"; then len="$1"; else len=5000; fi
+nohup "$0" -d "$file" "$len" </dev/null &>/dev/null & echo "$!"
