@@ -1,0 +1,3 @@
+#! /usr/bin/env bash
+
+xdotool keyup grave key "$(wmctrl -d | grep -F '*' | awk '{print $NF}')"
