@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # Usage: netaccess_activate_remote <ssh-host>
-# Ensures microsocks on the remote, reaches it (direct or SSH tunnel),
-# then launches Firefox via SOCKS5 to https://cc.iitm.ac.in
+#   ssh-host: name from ssh config OR user@host OR user@ip
 
 set -euo pipefail
 
 if test "$#" -ne 1; then
-    echo "Usage: netaccess_activate_remote <ssh-host>"
+    echo "Usage: netaccess_activate_remote <config-name|user@host|user@ip>"
     exit 1
 fi
 
@@ -21,13 +20,21 @@ fi
 
 echo "remote=$remote ip=$ip port=$port"
 
-# microsocks on remote, else scp ours into ~/bin
+# check if microsocks is there on remote, else download static binary locally and scp
+msocks_url=https://raw.githubusercontent.com/porridgewithraisins/microsocks/master/microsocks
+msocks_local=$HOME/.local/bin/microsocks
 if ssh "$remote" 'test -x "$HOME/bin/microsocks" || command -v microsocks >/dev/null 2>&1'; then
     echo "microsocks already on $remote"
 else
-    echo "microsocks missing on $remote — scp /bin/microsocks -> ~/bin"
+    if test ! -x "$msocks_local"; then
+        echo "downloading static microsocks -> $msocks_local"
+        mkdir -p "$HOME/.local/bin"
+        curl -fsSL -o "$msocks_local" "$msocks_url"
+        chmod +x "$msocks_local"
+    fi
+    echo "microsocks missing on $remote — scp $msocks_local -> ~/bin"
     ssh "$remote" 'mkdir -p ~/bin'
-    scp /bin/microsocks "$remote:~/bin/microsocks"
+    scp "$msocks_local" "$remote:~/bin/microsocks"
 fi
 
 # start microsocks if nothing is listening on 1080
@@ -44,7 +51,7 @@ socks_ok() {
     test "$(printf '\x05\x01\x00' | timeout 2 nc -w 2 "$1" "$port" 2>/dev/null | xxd -p)" = "0500"
 }
 
-# direct reachability, else SSH tunnel
+# check direct reachability, else SSH tunnel
 proxy=$ip
 if socks_ok "$ip"; then
     echo "reachable directly at $ip:$port"
