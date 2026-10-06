@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Usage: netaccess_activate_remote <ssh-host>
+# Ensures microsocks on the remote, reaches it (direct or SSH tunnel),
+# then launches Firefox via SOCKS5 to https://cc.iitm.ac.in
+
+set -euo pipefail
+
+if test "$#" -ne 1; then
+    echo "Usage: netaccess_activate_remote <ssh-host>"
+    exit 1
+fi
+
+remote=$1
+port=1080
+
+ip=$(ssh -G "$remote" | awk '$1 == "hostname" { print $2; exit }')
+if test -z "$ip"; then
+    echo "Could not resolve hostname for ssh host '$remote'"
+    exit 1
+fi
+
+echo "remote=$remote ip=$ip port=$port"
+
+# microsocks on remote, else scp ours into ~/bin
+if ssh "$remote" 'test -x "$HOME/bin/microsocks" || command -v microsocks >/dev/null 2>&1'; then
+    echo "microsocks already on $remote"
+else
+    echo "microsocks missing on $remote — scp /bin/microsocks -> ~/bin"
+    ssh "$remote" 'mkdir -p ~/bin'
+    scp /bin/microsocks "$remote:~/bin/microsocks"
+fi
+
+# start microsocks if nothing is listening on 1080
+if ssh "$remote" "ss -ltn | grep -q ':$port '"; then
+    echo "something already listening on $remote:$port"
+else
+    echo "starting microsocks on $remote:$port"
+    ssh "$remote" "export PATH=\"\$HOME/bin:\$PATH\"; nohup microsocks -p $port >/dev/null 2>&1 &"
+    sleep 0.5
+fi
+
+# SOCKS5 no-auth greeting -> expect 05 00
+socks_ok() {
+    test "$(printf '\x05\x01\x00' | timeout 2 nc -w 2 "$1" "$port" 2>/dev/null | xxd -p)" = "0500"
+}
+
+# direct reachability, else SSH tunnel
+proxy=$ip
+if socks_ok "$ip"; then
+    echo "reachable directly at $ip:$port"
+else
+    echo "not reachable directly — opening ssh tunnel localhost:$port -> $remote:$port"
+    if ss -ltn | grep -q ":$port "; then
+        echo "local :$port already in use, assuming existing tunnel/proxy is fine"
+    else
+        ssh -f -N -L "$port:127.0.0.1:$port" "$remote"
+        sleep 0.3
+    fi
+    proxy=127.0.0.1
+    if ! socks_ok "$proxy"; then
+        echo "SOCKS still not reachable at $proxy:$port"
+        exit 1
+    fi
+fi
+
+# firefox profile
+profile=/tmp/ff-netaccess-${remote}-${port}
+mkdir -p "$profile"
+cat > "$profile/user.js" <<EOF
+user_pref("network.proxy.type", 1);
+user_pref("network.proxy.socks", "$proxy");
+user_pref("network.proxy.socks_port", $port);
+user_pref("network.proxy.socks_version", 5);
+user_pref("network.proxy.socks_remote_dns", true);
+user_pref("network.proxy.no_proxies_on", "localhost, 127.0.0.1");
+EOF
+
+# launch
+echo "SOCKS5 $proxy:$port  (profile $profile)"
+echo "If firefox didn't launch, run firefox -no-remote -profile $profile https://cc.iitm.ac.in"
+firefox -no-remote -profile "$profile" https://cc.iitm.ac.in

@@ -1,0 +1,9 @@
+#!/usr/bin/env python
+
+import secrets, string, sys
+from contextlib import suppress
+
+len = 16
+with suppress(Exception): len = int(sys.argv[1])
+
+print("".join(secrets.choice(string.ascii_letters*4 + string.digits*2 + string.punctuation) for _ in range(len)))
